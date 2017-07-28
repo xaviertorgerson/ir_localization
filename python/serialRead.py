@@ -4,9 +4,10 @@ from PointBuffer import PointBuffer
 import math
 import numpy
 
+aspect_ratio = 1 #(9.0/16.0) #height/width
 # Define constants
 canvas_width = 1022
-canvas_height = 1022
+canvas_height = int(768 * aspect_ratio)
 
 bottom_left = None
 bottom_right = None
@@ -18,6 +19,14 @@ tk = Tk()
 tk.title("ir localization")
 canvas = Canvas(tk, width=canvas_width, height=canvas_height)
 canvas.pack()
+
+#canvas.create_oval(5, 5, 15, 15, fill="blue")
+#canvas.create_oval(995, 5, 1005, 15, fill="blue")
+#canvas.create_oval(5, 695, 15, 705, fill="blue")
+#canvas.create_oval(995, 695, 1005, 705, fill="blue")
+
+canvas.create_oval(495, 495, 505, 505, fill="orange")
+canvas.create_oval(495, 195, 505, 205, fill="orange")
 
 def affine_matrix_from_points(v0, v1, shear=True, scale=True, usesvd=True):
     """Return affine transform matrix to register two point sets.
@@ -128,67 +137,78 @@ def affine_matrix_from_points(v0, v1, shear=True, scale=True, usesvd=True):
     # move centroids back
     M = numpy.dot(numpy.linalg.inv(M1), numpy.dot(M, M0))
     M /= M[ndims, ndims]
-    return M
+    return numpy.matrix(M)
 
-def draw_lines(current_point, last_point):
+def draw_lines(current_point, last_point, color):
     if(current_point is not None and last_point is not None):
         (last_x, last_y) = last_point
         (current_x, current_y) = current_point
-        canvas.create_line(last_x, last_y, current_x, current_y, fill="red")
+        canvas.create_line(last_x, last_y, current_x, current_y, fill=color, width=4)
 
 # Initialize serial connection
 ser = serial.Serial(sys.argv[1], 19200)
 point_buffer = PointBuffer()
+point_buffer.aspect_ratio = aspect_ratio
 
 calibrate = True
-
+limit = 0
+limit2 = 0
 print("Calibrate bottom left of screen")
 while(True):
+    limit += 1
     line = ser.readline()
-    point_buffer.update(line)
+    if(limit > 100):
+        point_buffer.update(line)
 
+        if((bottom_left is None) or (bottom_right is None) or (top_left is None) or (top_right is None)):
+            if(bottom_left is None):
+                if(point_buffer.drawable_point[-1] is not None and calibrate):
+                    bottom_left = point_buffer.drawable_point[-1]
+                    calibrate = False
+                    print("Bottom left at point", point_buffer.drawable_point[-1])
+                    print("Calibrate bottom right of screen")
+                elif(point_buffer.drawable_point[-1] is None):
+                    calibrate = True
+            elif(bottom_right is None):
+                if(point_buffer.drawable_point[-1] is not None and calibrate):
+                    bottom_right = point_buffer.drawable_point[-1]
+                    calibrate = False
+                    print("Bottom right at point", point_buffer.drawable_point[-1])
+                    print("Calibrate top left of screen")
+                elif(point_buffer.drawable_point[-1] is None):
+                    calibrate = True
+            elif(top_left is None):
+                if(point_buffer.drawable_point[-1] is not None and calibrate):
+                    top_left = point_buffer.drawable_point[-1]
+                    calibrate = False
+                    print("Top left at point", point_buffer.drawable_point[-1])
+                    print("Calibrate top right of screen")
+                elif(point_buffer.drawable_point[-1] is None):
+                    calibrate = True
+            elif(top_right is None):
+                if(point_buffer.drawable_point[-1] is not None and calibrate):
+                    top_right = point_buffer.drawable_point[-1]
+                    calibrate = False
+                    print("Top right at point", point_buffer.drawable_point[-1])
+                    #M = affine_matrix_from_points([(top_left[0], top_left[1], 1), (bottom_right[0], bottom_right[1], 1), (top_right[0], top_right[1], 1)], [ (0,0,1), (canvas_width,canvas_height,1), (canvas_width,0,1)], shear=False, scale=True, usesvd=True)
+                    srcConfig = numpy.linalg.inv(numpy.matrix([(top_left[0], bottom_right[0], top_right[0]), (top_left[1], bottom_right[1], top_right[1]), (1, 1, 1)]))
+                    targetConfig = numpy.matrix([(0,canvas_width,canvas_width), (0,canvas_height,0), (1,1,1)])
+                    print(srcConfig)
+                    print(targetConfig)
 
-    if((bottom_left is None) or (bottom_right is None) or (top_left is None) or (top_right is None)):
-        if(bottom_left is None):
-            if(point_buffer.strongest_point[-1] is not None and calibrate):
-                bottom_left = point_buffer.strongest_point[-1]
-                calibrate = False
-                print("Bottom left at point", point_buffer.strongest_point[-1])
-                print("Calibrate bottom right of screen")
-            elif(point_buffer.strongest_point[-1] is None):
-                calibrate = True
-        elif(bottom_right is None):
-            if(point_buffer.strongest_point[-1] is not None and calibrate):
-                bottom_right = point_buffer.strongest_point[-1]
-                calibrate = False
-                print("Bottom right at point", point_buffer.strongest_point[-1])
-                print("Calibrate top left of screen")
-            elif(point_buffer.strongest_point[-1] is None):
-                calibrate = True
-        elif(top_left is None):
-            if(point_buffer.strongest_point[-1] is not None and calibrate):
-                top_left = point_buffer.strongest_point[-1]
-                calibrate = False
-                print("Top left at point", point_buffer.strongest_point[-1])
-                print("Calibrate top right of screen")
-            elif(point_buffer.strongest_point[-1] is None):
-                calibrate = True
-        elif(top_right is None):
-            if(point_buffer.strongest_point[-1] is not None and calibrate):
-                top_right = point_buffer.strongest_point[-1]
-                calibrate = False
-                print("Top right at point", point_buffer.strongest_point[-1])
-                M = affine_matrix_from_points([(bottom_left[0],bottom_left[1],0),(bottom_right[0], bottom_right[1],0), (top_right[0], top_right[1], 0)], [(0,0,0),(canvas_width,0,0),(canvas_width,canvas_height,0)], shear=False, scale=True, usesvd=True)
-                #point_buffer.transformation_matrix = M
-                print(M)
-            elif(point_buffer.strongest_point[-1] is None):
-                calibrate = True
-    else:
-        draw_lines(point_buffer.strongest_point[-1], point_buffer.strongest_point[-2]) # If points changed draw a new line
-        #draw_lines(point_buffer.transformation_matrix[-1], point_buffer.transformation_matrix[-2]) # If points changed draw a new line
+                    M = targetConfig * srcConfig
+                    point_buffer.transformation_matrix = M
+                    print(M)
+                elif(point_buffer.drawable_point[-1] is None):
+                    calibrate = True
+        else:
+            limit2+=1
+            if(limit2 > 100):
+                #draw_lines(point_buffer.drawable_point[-1], point_buffer.drawable_point[-2], "red") # If points changed draw a new line
+                draw_lines(point_buffer.transformed_point[-1], point_buffer.transformed_point[-2], "red") # If points changed draw a new line
 
-    # Update GUI
-    tk.update_idletasks()
-    tk.update()
+        # Update GUI
+        tk.update_idletasks()
+        tk.update()
 
 ser.close()

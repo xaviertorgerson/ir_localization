@@ -8,33 +8,53 @@ class PointBuffer:
   def __init__(self):
     self.all_points = []
     self.strongest_point = []
+
+    self.aspect_ratio = 1;
+    self.drawable_point = []
+
+    self.transformation_matrix = None
     self.transformed_point = []
-    self.transformation_matrix
+
 
   def update(self, line):
     self.add(self.decode(line))
-    new_points = self.all_points[-1]
-    new_point = self.strongest_point[-1]
+    self.display()
 
+    '''
     # Print new points
     if(new_point is not None):
+      print("\n")
       if(len(new_points) > 1):
-        print("Points seen", new_points)
+        print("All points", new_points)
       (x, y) = new_point
-      print("Tracing point @", x, y)
+      print("Strongest point @", x, y)
+      if(self.transformed_point is not None):
+        if(len(self.transformed_point) > 0):
+          (transformed_x, transformed_y) = self.transformed_point[-1]
+          print("Transformed point @", transformed_x, transformed_y)
+    '''
+
+  def display(self):
+    if(self.all_points[-1] is not None):
+      print("All points",self.all_points[-1])
+      print("Main point",self.strongest_point[-1])
+      print("GUI point",self.drawable_point[-1])
+      if(len(self.transformed_point) > 0):
+        print("Trans point",self.transformed_point[-1])
+      print("\n")
+
 
   def add(self, new_points):
     self.all_points.append(new_points)
-    self.strongest_point.append(self.find_strongest_point(new_points))
-    #if(new_points is not None):
-    #    v0 = numpy.array((self.strongest_point[-1][0],self.strongest_point[-1][1], 0))
-    #    self.transformed_point.append(v0*self.transformation_matrix)
-    #    print("Transformed Point=",self.transformed_point[-1])
+    self.strongest_point.append(self.get_strongest_point(new_points))
+    self.drawable_point.append(self.get_drawable_point(self.strongest_point[-1]))
+    if(self.transformation_matrix is not None):
+        self.transformed_point.append(self.get_transformed_point(self.drawable_point[-1]))
 
   def decode(self, line):
     output = line.strip('\n').strip('\r').split(',')
 
-    if (len(output) == 8): # Validate strin
+    if (len(output) == 8): # Validate string
 
       new_points = []
       if(int(output[0]) != 1023 or int(output[1]) != 1023):
@@ -51,7 +71,7 @@ class PointBuffer:
 
     return None
 
-  def find_strongest_point(self, new_points):
+  def get_strongest_point(self, new_points):
     if (new_points is None):
       return None
 
@@ -74,6 +94,22 @@ class PointBuffer:
 
     else:
         return new_points[0]
+
+  def get_drawable_point(self, new_point):
+    if (new_point is None):
+      return None
+
+    (x, y) = new_point
+    return (1022-x, y)
+
+  def get_transformed_point(self, new_point):
+    if (new_point is None):
+      return None
+
+    #v0 = numpy.array([[new_point[0]],[new_point[1]], [0], [1]])
+    v0 = numpy.array([[new_point[0]],[new_point[1]], [1]])
+    transformed_vector = self.transformation_matrix*v0
+    return (transformed_vector.item(0), transformed_vector.item(1))
 
   def get_last_valid_point(self):
     for point in reversed(self.strongest_point):
